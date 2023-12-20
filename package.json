@@ -1,0 +1,14 @@
+{
+  "name": "bot",
+  "version": "1.0.0",
+  "description": "A bot that replaces non-embedded links with their embedded counterpart",
+  "main": "dist/index.js",
+  "repository": "https://github.com/getaddrinfo/linkfix-bot",
+  "author": "gtdr",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "@discordjs/rest": "^2.2.0",
+    "@discordjs/ws": "^1.0.2"
+  }
+}
