@@ -9,7 +9,7 @@
     "module": "CommonJS",
     "types": ["node"],
     "resolveJsonModule": true,
-    "sourceMap": true,
+    "inlineSourceMap": true,
     "removeComments": false, 
     "preserveConstEnums": true,
     "allowSyntheticDefaultImports": true,
@@ -27,6 +27,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "rootDirs": ["./src", "drizzle.config.ts"]
   }
 }

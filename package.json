@@ -9,6 +9,13 @@
   "private": true,
   "dependencies": {
     "@discordjs/rest": "^2.2.0",
-    "@discordjs/ws": "^1.0.2"
+    "@discordjs/ws": "^1.0.2",
+    "discord-api-types": "^0.37.66",
+    "drizzle-orm": "^0.29.1",
+    "mysql2": "^3.6.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.20.7",
+    "tsx": "^4.7.0"
   }
 }
