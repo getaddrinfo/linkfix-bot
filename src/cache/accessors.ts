@@ -83,6 +83,10 @@ export const getCurrentMemberPermissions = (
     out |= (roles.get(roleId) ?? 0)
   }
 
+  if ((out & CustomPermissionsRepr.Administrator) === CustomPermissionsRepr.Administrator) {
+    out = CustomPermissionsRepr.Administrator | CustomPermissionsRepr.CreateMessages | CustomPermissionsRepr.ManageMessages | CustomPermissionsRepr.ViewChannel;
+  }
+
   return out;
 }
 

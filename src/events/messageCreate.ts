@@ -4,10 +4,7 @@ import { getServices, ServiceId } from "../service/services";
 import { getOrCreate } from "../db/guild/getOrCreate";
 import { Guild } from "../db/schema";
 import { send } from "../send";
-import { FutureStore } from "../features/future/store";
-import { createMemoryStore } from "../features/future/memory";
-
-export let store: FutureStore = createMemoryStore();
+import { future } from "../stores";
 
 export const onMessageCreate = async (message: GatewayMessageCreateDispatchData) => {
   if (
@@ -23,7 +20,7 @@ export const onMessageCreate = async (message: GatewayMessageCreateDispatchData)
   const guild = await getOrCreate(message.guild_id);
 
   if (guild.features.waitForValidEmbed) {
-    const [left, right] = await Promise.all([
+    const [futures, nonReasonable] = await Promise.all([
       handleValidLinksOnly(
         message, 
         guild, 
@@ -36,14 +33,20 @@ export const onMessageCreate = async (message: GatewayMessageCreateDispatchData)
       )
     ]);
 
-    const all = [...(left ?? []), ...(right ?? [])];
+    console.log(
+      futures,
+      nonReasonable
+    )
+
+    const all = [...(futures?.postInstantly ?? []), ...(nonReasonable ?? [])];
     if (all.length === 0) return;
 
     await send(all, {
       channelId: message.channel_id,
       guildId: message.guild_id,
+      parentId: message.id,
       features: guild.features
-    });
+    }, { willBeEdited: futures?.hasFutures ?? false });
 
     return;
   }
@@ -55,12 +58,14 @@ export const onMessageCreate = async (message: GatewayMessageCreateDispatchData)
   );
 
   if (result === null) return;
-    await send(result, {
-      channelId: message.channel_id,
-      guildId: message.guild_id,
-      features: guild.features
-    });
-  }
+  
+  await send(result, {
+    channelId: message.channel_id,
+    guildId: message.guild_id,
+    parentId: message.id,
+    features: guild.features
+  });
+}
 
 const handleValidLinksOnly = async (
   message: GatewayMessageCreateDispatchData,
@@ -70,7 +75,7 @@ const handleValidLinksOnly = async (
   const rewrites = run(message.content, services);  
   if (rewrites === null) return null;
 
-  const now = [];
+  const postInstantly = [];
   const futures: Partial<Record<ServiceId, Record<string, string>>> = {};
   
   for(const rewrite of rewrites) {
@@ -89,7 +94,7 @@ const handleValidLinksOnly = async (
       // if we do have an embed, and the original link is healthy, then
       // discord had it cached
       if (rewrite.service.features.waitForEmbed?.isOriginalLinkHealthy(embed)) {
-        now.push(rewritten);
+        postInstantly.push(rewritten);
       }
 
       // if discord had it cached, and the link isn't healthy, then it's likely dead: maybe try and fetch,
@@ -98,8 +103,10 @@ const handleValidLinksOnly = async (
     }
   }
 
-  if (Object.keys(futures).length) {
-    await store.set(
+  const hasFutures = Object.keys(futures).length !== 0;
+
+  if (hasFutures) {
+    await future.set(
       message.channel_id,
       { 
         tiktok: futures.tiktok ?? {},
@@ -108,10 +115,7 @@ const handleValidLinksOnly = async (
     )
   }
 
-  console.log("check the embed in future !!!", futures);
-  console.log("send the rewritten links now !!!", now);
-
-  return now;
+  return { postInstantly, hasFutures };
 }
 
 const handleInstantRepost = async (
