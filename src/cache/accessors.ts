@@ -77,7 +77,7 @@ export const getCurrentMemberPermissions = (
   const roles = getGuildRoles(guildId);
   if (!roles) return null;
 
-  let out = 0;
+  let out = roles.get(guildId) ?? 0;
 
   for(const roleId of guild.selfRoles) {
     out |= (roles.get(roleId) ?? 0)
