@@ -1,9 +1,13 @@
 import type { GatewayMessageCreateDispatchData } from "discord-api-types/v10";
 import { run, type Service } from "../service";
-import { rest } from "../rest";
-import { getServices } from "../service/services";
+import { getServices, ServiceId } from "../service/services";
 import { getOrCreate } from "../db/guild/getOrCreate";
 import { Guild } from "../db/schema";
+import { send } from "../send";
+import { FutureStore } from "../features/future/store";
+import { createMemoryStore } from "../features/future/memory";
+
+export let store: FutureStore = createMemoryStore();
 
 export const onMessageCreate = async (message: GatewayMessageCreateDispatchData) => {
   if (
@@ -19,7 +23,7 @@ export const onMessageCreate = async (message: GatewayMessageCreateDispatchData)
   const guild = await getOrCreate(message.guild_id);
 
   if (guild.features.waitForValidEmbed) {
-    await Promise.allSettled([
+    const [left, right] = await Promise.all([
       handleValidLinksOnly(
         message, 
         guild, 
@@ -31,36 +35,53 @@ export const onMessageCreate = async (message: GatewayMessageCreateDispatchData)
         services.filter((service) => !service.features.waitForEmbed)
       )
     ]);
+
+    const all = [...(left ?? []), ...(right ?? [])];
+    if (all.length === 0) return;
+
+    await send(all, {
+      channelId: message.channel_id,
+      guildId: message.guild_id,
+      features: guild.features
+    });
+
     return;
   }
 
-  return await handleInstantRepost(
+  const result = await handleInstantRepost(
     message,
     guild,
     services
-  )
-}
+  );
+
+  if (result === null) return;
+    await send(result, {
+      channelId: message.channel_id,
+      guildId: message.guild_id,
+      features: guild.features
+    });
+  }
 
 const handleValidLinksOnly = async (
   message: GatewayMessageCreateDispatchData,
   _guild: Guild,
   services: Service[]
 ) => {
-  const rewrites = run(message.content, services);
-  console.log("result", rewrites);
+  const rewrites = run(message.content, services);  
+  if (rewrites === null) return null;
 
-  const futures = [];
   const now = [];
+  const futures: Partial<Record<ServiceId, Record<string, string>>> = {};
   
-  console.log("embeds", message.embeds);
-
   for(const rewrite of rewrites) {
     for (const [originalLink, rewritten] of Object.entries(rewrite.links)) {
-      const embed = message.embeds.find((embed) => embed.url === originalLink);
+      const embed = message.embeds.find((embed) => embed.url && embed.url.startsWith(originalLink));
 
       // if we don't have an embed, discord didn't have it cached...
       if (!embed) {
-        futures.push(originalLink);
+        futures[rewrite.service.id as ServiceId] ??= {};
+        futures[rewrite.service.id as ServiceId]![originalLink] = rewritten;
+
         continue;
       };
 
@@ -71,42 +92,38 @@ const handleValidLinksOnly = async (
         now.push(rewritten);
       }
 
-      // if discord had it cached, and the link isn't healthy, then it's likely dead:  don't try and fetch
+      // if discord had it cached, and the link isn't healthy, then it's likely dead: maybe try and fetch,
+      // then edit the link out of the message if it is *actually* dead? 
+      // TODO: behaviour described above
     }
   }
 
-  console.log("update in future!!!", futures);
-  console.log("send right now!!!", now);
+  if (Object.keys(futures).length) {
+    await store.set(
+      message.channel_id,
+      { 
+        tiktok: futures.tiktok ?? {},
+        parentId: message.id
+      }
+    )
+  }
 
-  console.warn('handleValidLinksOnly: unsupported');
+  console.log("check the embed in future !!!", futures);
+  console.log("send the rewritten links now !!!", now);
+
+  return now;
 }
 
 const handleInstantRepost = async (
   message: GatewayMessageCreateDispatchData,
-  guild: Guild,
+  _guild: Guild,
   services: Service[]
 ) => {
   const rewrites = run(message.content, services);
-  if (rewrites.length === 0) return;
+  if (rewrites === null) return null;
 
-  const links = rewrites.reduce((acc, { links }) => acc + Object.values(links).join('\n'), '');
-  if (guild.features.onlySendLinks) {
-    await rest.post(`/channels/${message.channel_id}/messages`, {
-      body: {
-        content: links,
-        allowed_mentions: { parse: [] }
-      }
-    }); 
-
-    return; 
-  }
-
-  const total = rewrites.reduce((acc, { links }) => acc + Object.values(links).length, 0);
-  
-  await rest.post(`/channels/${message.channel_id}/messages`, {
-    body: {
-      content: `Fixed ${total} link${total === 1 ? '' : 's'}:\n${links}`,
-      allowed_mentions: { parse: [] }
-    }
-  });
+  return rewrites.reduce(
+    (acc, { links }) => acc.concat(Object.values(links)),
+    [] as string[]
+  );
 }

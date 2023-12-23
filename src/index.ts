@@ -1,14 +1,19 @@
 import { WebSocketManager, WebSocketShardEvents } from "@discordjs/ws";
-import { PresenceUpdateStatus, ActivityType } from 'discord-api-types/v10';
+import { PresenceUpdateStatus, ActivityType, GatewayIntentBits, GatewayDispatchEvents } from 'discord-api-types/v10';
 
 import { httpServer } from "./api";
 import { onMessageCreate } from "./events/messageCreate";
 import { onMessageUpdate } from "./events/messageUpdate";
 import { rest } from "./rest";
 
+import { onGuildCreate, onGuildDelete, onGuildUpdate } from "./cache/guilds";
+import { onChannelCreate, onChannelDelete, onChannelUpdate } from "./cache/channel";
+import { onRoleCreate, onRoleDelete, onRoleUpdate } from "./cache/roles";
+import { onMemberAdd, onMemberRemove, onMemberUpdate } from "./cache/members";
+
 const manager = new WebSocketManager({
   token: process.env.DISCORD_BOT_TOKEN!,
-  intents: 1 << 9 | 1 << 15, // guild messages + message content
+  intents: GatewayIntentBits.GuildMessages | GatewayIntentBits.MessageContent | GatewayIntentBits.Guilds,
   rest,
   initialPresence: {
     activities: [{
@@ -30,17 +35,60 @@ manager.on(WebSocketShardEvents.Error, ({ shardId, error }) => {
 });
 manager.on(WebSocketShardEvents.Resumed, ({ shardId }) => console.log(`[shard(${shardId})]: resumed`));
 
+GatewayDispatchEvents
+
 /**
  * Checks for a `MESSAGE_CREATE` event, and runs the matchers on it
  * if it is such. Ignores all other events.
  */
 manager.on(WebSocketShardEvents.Dispatch, async ({ data }) => {
+  console.log(data.t);
   switch (data.t) {
+    case 'GUILD_CREATE':
+      onGuildCreate(data.d);
+      break;
+    case 'GUILD_UPDATE':
+      onGuildUpdate(data.d);
+      break;
+    case 'GUILD_DELETE':
+      onGuildDelete(data.d);
+      break;
+
+    case 'CHANNEL_CREATE':
+      onChannelCreate(data.d);
+      break;
+    case 'CHANNEL_UPDATE':
+      onChannelUpdate(data.d);
+      break;
+    case 'CHANNEL_DELETE':
+      onChannelDelete(data.d);
+      break;
+
+    case 'GUILD_ROLE_CREATE':
+      onRoleCreate(data.d);
+      break;
+    case 'GUILD_ROLE_UPDATE':
+      onRoleUpdate(data.d);
+      break;
+    case 'GUILD_ROLE_DELETE':
+      onRoleDelete(data.d);
+      break;
+
+    case 'GUILD_MEMBER_ADD':
+      onMemberAdd(data.d);
+      break;
+    case 'GUILD_MEMBER_UPDATE':
+      onMemberUpdate(data.d);
+      break;
+    case 'GUILD_MEMBER_REMOVE':
+      onMemberRemove(data.d);
+      break;
+
     case 'MESSAGE_CREATE':
-      onMessageCreate(data.d);
+      await onMessageCreate(data.d);
       break
     case 'MESSAGE_UPDATE':
-      onMessageUpdate(data.d);
+      await onMessageUpdate(data.d);
       break;
     
     default:

@@ -7,7 +7,9 @@ export const services = {
   twitter
 }
 
-const serviceList = Object.values(services);
+const serviceList = [tiktok, twitter] as const;
+
+export type ServiceId = (typeof serviceList)[number]['id'];
 
 export const getServices = (content: string): Service[] => {
   return serviceList.filter(
@@ -27,7 +29,7 @@ interface RunResult {
  * @param content The message content to check
  * @returns The rewritten links, if any
  */
-export const run = (content: string, testAgainst: Service[] | null = null): RunResult[] => {
+export const run = (content: string, testAgainst: readonly Service[] | null = null): RunResult[] | null => {
   testAgainst ??= serviceList;
   const fixedLinks = [] as any[];
 
@@ -57,7 +59,8 @@ export const run = (content: string, testAgainst: Service[] | null = null): RunR
     });
   }
 
-  console.log(fixedLinks);
+  if (fixedLinks.length === 0) return null;
+
   return fixedLinks;
 }
 

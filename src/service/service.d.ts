@@ -4,6 +4,8 @@ import { APIEmbed } from "discord-api-types/v10";
  * Represents a service that can be rewritten
  */
 export interface Service {
+  id: string;
+
   /**
    * The pretty name of the service, e.g., 'Twitter'
    */
