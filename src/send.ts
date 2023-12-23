@@ -14,7 +14,6 @@ export const send = async (
   { guildId, channelId, features }: Context, 
 ) => {
   if (!hasPermissionInChannel(guildId, channelId, CustomPermissionsRepr.CreateMessages)) {
-    console.log('fuark off');
     return;
   }
 
