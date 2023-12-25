@@ -35,4 +35,4 @@ export const httpServer = (manager: WebSocketManager) => createServer(async (req
 
   await res.write(JSON.stringify(out));
   await res.end();
-}).listen(8080);
+}).listen(+process.env.API_PORT!);
